@@ -23,21 +23,30 @@ ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
 productos = {
-    "Victoria": 48,
-    "Corona": 48,
-    "Pall Mall Azul": 7,
-    "Marlboro Rojo": 7
+    "1": {"nombre": "Victoria", "precio": 48},
+    "2": {"nombre": "Corona", "precio": 48},
+    "3": {"nombre": "Pall Mall Azul", "precio": 7},
+    "4": {"nombre": "Marlboro Rojo", "precio": 7}
 }
 
 ticket_actual = {}
 total = 0
+recibido_temporal = ""
 
 # =====================================
 # FUNCIONES
 # =====================================
 
-def agregar_producto(nombre, precio):
+def agregar_producto(tecla):
+    """Agrega un producto por tecla numérica"""
     global total
+    
+    if tecla not in productos:
+        return
+    
+    datos_producto = productos[tecla]
+    nombre = datos_producto["nombre"]
+    precio = datos_producto["precio"]
 
     if nombre in ticket_actual:
         ticket_actual[nombre]["cantidad"] += 1
@@ -51,117 +60,182 @@ def agregar_producto(nombre, precio):
 
     actualizar_ticket()
     calcular_cambio()
+    
+    # Feedback visual
+    parpadear_producto(tecla)
 
-def quitar_producto(nombre):
-
+def quitar_ultimo_producto():
+    """Quita el último producto agregado"""
     global total
-
-    if nombre not in ticket_actual:
+    
+    if not ticket_actual:
         return
-
-    precio = ticket_actual[nombre]["precio"]
-
-    ticket_actual[nombre]["cantidad"] -= 1
-
+    
+    # Obtener el último producto agregado
+    ultimo_producto = list(ticket_actual.keys())[-1]
+    
+    precio = ticket_actual[ultimo_producto]["precio"]
+    ticket_actual[ultimo_producto]["cantidad"] -= 1
     total -= precio
-
-    if ticket_actual[nombre]["cantidad"] <= 0:
-        del ticket_actual[nombre]
-
+    
+    if ticket_actual[ultimo_producto]["cantidad"] <= 0:
+        del ticket_actual[ultimo_producto]
+    
     if total < 0:
         total = 0
-
+    
     actualizar_ticket()
     calcular_cambio()
 
 def actualizar_ticket():
-
+    """Actualiza la visualización del ticket"""
+    ticket.configure(state="normal")
     ticket.delete("1.0", "end")
 
-    ticket.insert("end", "========================\n")
-    ticket.insert("end", "         TICKET\n")
-    ticket.insert("end", "========================\n\n")
+    ticket.insert("end", "╔════════════════════════════╗\n")
+    ticket.insert("end", "║         TICKET             ║\n")
+    ticket.insert("end", "╚════════════════════════════╝\n\n")
 
     for producto, datos in ticket_actual.items():
-
         cantidad = datos["cantidad"]
         precio = datos["precio"]
         subtotal = cantidad * precio
 
         ticket.insert(
             "end",
-            f"{producto:<20} x{cantidad:<3} ${subtotal}\n"
+            f"{producto:<18} x{cantidad:<2} ${subtotal}\n"
         )
 
-    ticket.insert("end", "\n------------------------\n")
-    ticket.insert("end", f"TOTAL: ${total}")
+    ticket.insert("end", "\n" + "─" * 30 + "\n")
+    ticket.insert("end", f"TOTAL: ${total}\n")
+    ticket.insert("end", "─" * 30 + "\n")
 
     total_label.configure(
         text=f"TOTAL: ${total}"
     )
-
+    
+    ticket.configure(state="disabled")
 
 def calcular_cambio(event=None):
-
+    """Calcula el cambio según lo ingresado"""
+    global recibido_temporal
+    
     try:
-
-        recibido = float(recibido_entry.get())
+        recibido = float(recibido_temporal) if recibido_temporal else 0
 
         if recibido >= total:
-
             cambio = recibido - total
-
             cambio_label.configure(
-                text=f"CAMBIO: ${cambio:.2f}"
+                text=f"CAMBIO: ${cambio:.2f}",
+                text_color="lightgreen"
             )
-
         else:
-
             cambio_label.configure(
-                text="CAMBIO: $0.00"
+                text=f"Falta: ${total - recibido:.2f}",
+                text_color="orange"
             )
 
     except:
-
         cambio_label.configure(
-            text="CAMBIO: $0.00"
+            text="CAMBIO: $0.00",
+            text_color="lightgreen"
         )
 
+def handle_numpad_input(event):
+    """Maneja entrada de números del teclado numérico y regular"""
+    global recibido_temporal
+    
+    key = event.keysym
+    char = event.char
+    
+    # Teclas de productos (1-4)
+    if key in productos:
+        agregar_producto(key)
+        return
+    
+    # Tecla ENTER para cobrar
+    if key == "Return":
+        cobrar()
+        return
+    
+    # Tecla C para cancelar
+    if key.lower() == "c":
+        cancelar_venta()
+        return
+    
+    # Tecla R para reportes
+    if key.lower() == "r":
+        mostrar_reportes()
+        return
+    
+    # Tecla BackSpace para quitar producto
+    if key == "BackSpace":
+        quitar_ultimo_producto()
+        return
+    
+    # Números para ingresar dinero recibido
+    if char.isdigit():
+        recibido_temporal += char
+        recibido_label.configure(
+            text=f"RECIBIDO: ${recibido_temporal if recibido_temporal else '0'}"
+        )
+        calcular_cambio()
+        return
+    
+    # Punto decimal
+    if char == "." and "." not in recibido_temporal:
+        recibido_temporal += char
+        recibido_label.configure(
+            text=f"RECIBIDO: ${recibido_temporal if recibido_temporal else '0'}"
+        )
+        return
+    
+    # Borrar último dígito con Delete
+    if key == "Delete":
+        if recibido_temporal:
+            recibido_temporal = recibido_temporal[:-1]
+            recibido_label.configure(
+                text=f"RECIBIDO: ${recibido_temporal if recibido_temporal else '0'}"
+            )
+            calcular_cambio()
 
-def poner_efectivo(cantidad):
-
-    recibido_entry.delete(0, "end")
-    recibido_entry.insert(0, str(cantidad))
-
-    calcular_cambio()
+def parpadear_producto(tecla):
+    """Efecto visual cuando se selecciona un producto"""
+    botones_productos[tecla].configure(fg_color="white")
+    app.after(100, lambda: botones_productos[tecla].configure(fg_color="green"))
 
 def cancelar_venta():
-
-    global total
+    """Cancela la venta actual"""
+    global total, recibido_temporal
 
     ticket_actual.clear()
-
     total = 0
+    recibido_temporal = ""
 
+    ticket.configure(state="normal")
     ticket.delete("1.0", "end")
+    ticket.configure(state="disabled")
 
-    recibido_entry.delete(0, "end")
+    recibido_label.configure(
+        text="RECIBIDO: $0"
+    )
 
     total_label.configure(
         text="TOTAL: $0"
     )
 
     cambio_label.configure(
-        text="CAMBIO: $0.00"
+        text="CAMBIO: $0.00",
+        text_color="lightgreen"
     )
-
+    
+    messagebox.showinfo("Venta Cancelada", "La venta ha sido cancelada.")
 
 def cobrar():
-
-    global total
+    """Realiza el cobro"""
+    global total, recibido_temporal
 
     if total == 0:
-
         messagebox.showwarning(
             "Aviso",
             "No hay productos en la venta."
@@ -169,11 +243,8 @@ def cobrar():
         return
 
     try:
-
-        recibido = float(recibido_entry.get())
-
+        recibido = float(recibido_temporal) if recibido_temporal else 0
     except:
-
         messagebox.showerror(
             "Error",
             "Ingresa una cantidad válida."
@@ -181,10 +252,10 @@ def cobrar():
         return
 
     if recibido < total:
-
         messagebox.showerror(
             "Error",
-            "La cantidad recibida es insuficiente."
+            f"La cantidad recibida es insuficiente.\n"
+            f"Falta: ${total - recibido:.2f}"
         )
         return
 
@@ -196,7 +267,7 @@ def cobrar():
     )
 
     messagebox.showinfo(
-        "Venta completada",
+        "✓ Venta Completada",
         f"Total: ${total:.2f}\n"
         f"Recibido: ${recibido:.2f}\n"
         f"Cambio: ${cambio:.2f}"
@@ -209,7 +280,7 @@ def cobrar():
     )
 
 def mostrar_reportes():
-
+    """Muestra ventana de reportes"""
     ventana = ctk.CTkToplevel(app)
 
     ventana.title("Reporte de Ventas")
@@ -231,12 +302,11 @@ def mostrar_reportes():
 
     texto.pack(pady=10)
 
-    productos = obtener_corte_diario()
+    productos_reporte = obtener_corte_diario()
 
     texto.insert("end", "PRODUCTOS VENDIDOS\n\n")
 
-    for producto, cantidad, total_producto in productos:
-
+    for producto, cantidad, total_producto in productos_reporte:
         texto.insert(
             "end",
             f"{producto}\n"
@@ -261,28 +331,45 @@ crear_bd()
 
 app = ctk.CTk()
 
-app.title("Caja Registradora")
-app.geometry("1100x650")
+app.title("Caja Registradora - Control por Teclado")
+app.geometry("1000x700")
 
 # =====================================
-# TITULO
+# TITULO Y FOLIO
 # =====================================
+
+frame_header = ctk.CTkFrame(app)
+frame_header.pack(fill="x", padx=20, pady=15)
 
 titulo = ctk.CTkLabel(
-    app,
-    text="CAJA REGISTRADORA",
+    frame_header,
+    text="🛍️ CAJA REGISTRADORA",
     font=("Arial", 32, "bold")
 )
-
-titulo.pack(pady=20)
+titulo.pack(side="left", padx=10)
 
 folio_label = ctk.CTkLabel(
-    app,
+    frame_header,
     text=f"FOLIO: {obtener_siguiente_folio():06d}",
-    font=("Arial", 18, "bold")
+    font=("Arial", 16, "bold"),
+    text_color="orange"
 )
+folio_label.pack(side="right", padx=10)
 
-folio_label.pack()
+# =====================================
+# INSTRUCCIONES
+# =====================================
+
+frame_instrucciones = ctk.CTkFrame(app, fg_color="gray25")
+frame_instrucciones.pack(fill="x", padx=20, pady=10)
+
+instrucciones_text = ctk.CTkLabel(
+    frame_instrucciones,
+    text="⌨️  CONTROLES: [1-4] Productos  |  [Números] Dinero  |  [ENTER] Cobrar  |  [C] Cancelar  |  [BKSP] Quitar  |  [R] Reportes",
+    font=("Arial", 12),
+    text_color="lightblue"
+)
+instrucciones_text.pack(pady=8)
 
 # =====================================
 # PANEL PRINCIPAL
@@ -297,40 +384,46 @@ frame_principal.pack(
 )
 
 # =====================================
-# PRODUCTOS
+# PRODUCTOS (LADO IZQUIERDO)
 # =====================================
 
 frame_productos = ctk.CTkFrame(frame_principal)
 frame_productos.pack(
     side="left",
     fill="y",
-    padx=10,
+    padx=15,
     pady=10
 )
 
 ctk.CTkLabel(
     frame_productos,
-    text="PRODUCTOS",
-    font=("Arial", 22, "bold")
-).pack(pady=10)
+    text="📦 PRODUCTOS",
+    font=("Arial", 20, "bold")
+).pack(pady=15)
 
-for nombre, precio in productos.items():
+botones_productos = {}
+colores = ["#4CAF50", "#2196F3", "#FF9800", "#E91E63"]
 
+for tecla, color in zip(sorted(productos.keys()), colores):
+    datos = productos[tecla]
+    nombre = datos["nombre"]
+    precio = datos["precio"]
+    
     boton = ctk.CTkButton(
         frame_productos,
-        text=f"{nombre} - ${precio}",
+        text=f"[{tecla}] {nombre}\n${precio}",
         width=180,
-        height=45,
-        command=lambda n=nombre, p=precio: agregar_producto(n, p)
+        height=60,
+        font=("Arial", 14, "bold"),
+        fg_color=color,
+        command=lambda t=tecla: agregar_producto(t)
     )
-
-    boton.pack(
-        pady=10,
-        padx=15
-    )
+    
+    boton.pack(pady=15, padx=10)
+    botones_productos[tecla] = boton
 
 # =====================================
-# TICKET
+# TICKET (LADO DERECHO)
 # =====================================
 
 frame_ticket = ctk.CTkFrame(frame_principal)
@@ -338,26 +431,32 @@ frame_ticket.pack(
     side="right",
     fill="both",
     expand=True,
-    padx=10,
+    padx=15,
     pady=10
 )
 
 ctk.CTkLabel(
     frame_ticket,
-    text="TICKET ACTUAL",
-    font=("Arial", 24, "bold")
+    text="🧾 TICKET ACTUAL",
+    font=("Arial", 20, "bold")
 ).pack(pady=10)
 
 ticket = ctk.CTkTextbox(
     frame_ticket,
     width=600,
-    height=250
+    height=250,
+    font=("Courier", 12)
 )
 
 ticket.pack(
-    padx=20,
-    pady=10
+    padx=15,
+    pady=10,
+    fill="both",
+    expand=True
 )
+
+ticket.insert("end", "El ticket aparecerá aquí\n")
+ticket.configure(state="disabled")
 
 # =====================================
 # TOTAL
@@ -366,34 +465,24 @@ ticket.pack(
 total_label = ctk.CTkLabel(
     frame_ticket,
     text="TOTAL: $0",
-    font=("Arial", 28, "bold")
+    font=("Arial", 32, "bold"),
+    text_color="lightgreen"
 )
 
-total_label.pack(pady=10)
+total_label.pack(pady=15)
 
 # =====================================
-# RECIBIDO
+# DINERO RECIBIDO
 # =====================================
 
-ctk.CTkLabel(
+recibido_label = ctk.CTkLabel(
     frame_ticket,
-    text="RECIBIDO",
-    font=("Arial", 18, "bold")
-).pack(pady=(10, 5))
-
-recibido_entry = ctk.CTkEntry(
-    frame_ticket,
-    width=250,
-    height=40,
-    font=("Arial", 18)
+    text="RECIBIDO: $0",
+    font=("Arial", 24, "bold"),
+    text_color="lightblue"
 )
 
-recibido_entry.pack()
-
-recibido_entry.bind(
-    "<KeyRelease>",
-    calcular_cambio
-)
+recibido_label.pack(pady=10)
 
 # =====================================
 # CAMBIO
@@ -409,70 +498,44 @@ cambio_label = ctk.CTkLabel(
 cambio_label.pack(pady=15)
 
 # =====================================
-# BOTONES RAPIDOS
+# BOTONES RÁPIDOS (VISUAL)
 # =====================================
 
-frame_efectivo = ctk.CTkFrame(frame_ticket)
-frame_efectivo.pack(pady=10)
+frame_rapidos = ctk.CTkFrame(frame_ticket)
+frame_rapidos.pack(pady=15)
 
-for monto in [100, 200, 500, 1000]:
-
-    ctk.CTkButton(
-        frame_efectivo,
-        text=f"${monto}",
-        width=80,
-        command=lambda m=monto: poner_efectivo(m)
-    ).pack(
-        side="left",
-        padx=5
-    )
-
-# =====================================
-# BOTONES PRINCIPALES
-# =====================================
-
-frame_botones = ctk.CTkFrame(frame_ticket)
-frame_botones.pack(pady=20)
-
-cobrar_btn = ctk.CTkButton(
-    frame_botones,
-    text="COBRAR",
+ctk.CTkButton(
+    frame_rapidos,
+    text="[ENTER] COBRAR",
     fg_color="green",
-    width=150,
-    height=45,
+    width=140,
+    height=40,
     command=cobrar
-)
+).pack(side="left", padx=8)
 
-cobrar_btn.pack(
-    side="left",
-    padx=10
-)
-
-cancelar_btn = ctk.CTkButton(
-    frame_botones,
-    text="CANCELAR",
+ctk.CTkButton(
+    frame_rapidos,
+    text="[C] CANCELAR",
     fg_color="red",
-    width=150,
-    height=45,
+    width=140,
+    height=40,
     command=cancelar_venta
-)
+).pack(side="left", padx=8)
 
-cancelar_btn.pack(
-    side="left",
-    padx=10
-)
-
-reportes_btn = ctk.CTkButton(
-    frame_botones,
-    text="REPORTES",
+ctk.CTkButton(
+    frame_rapidos,
+    text="[R] REPORTES",
     fg_color="orange",
+    width=140,
+    height=40,
     command=mostrar_reportes
-)
+).pack(side="left", padx=8)
 
-reportes_btn.pack(
-    side="left",
-    padx=10
-)
+# =====================================
+# BINDINGS DE TECLADO
+# =====================================
+
+app.bind("<Key>", handle_numpad_input)
 
 # =====================================
 # INICIAR APP
