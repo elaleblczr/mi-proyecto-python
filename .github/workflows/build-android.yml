@@ -92,6 +92,7 @@ jobs:
             "platform-tools" \
             "platforms;android-31" \
             "build-tools;31.0.0"
+          export PATH="${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/build-tools/31.0.0:${PATH}"
           test -x "${ANDROID_HOME}/build-tools/31.0.0/aidl"
           command -v aidl
 
