@@ -44,7 +44,6 @@ jobs:
             libtool-bin \
             openjdk-17-jdk \
             pkg-config \
-            curl \
             unzip \
             zip \
             zlib1g-dev
@@ -54,38 +53,31 @@ jobs:
             sudo apt-get install -y libtinfo6
           fi
 
-      - name: Install Android SDK command-line tools
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: 11076708
+
+      - name: Install Android SDK packages
         shell: bash
         run: |
           set -euo pipefail
           export JAVA_HOME="/usr/lib/jvm/java-17-openjdk-amd64"
           export PATH="${JAVA_HOME}/bin:${PATH}"
           java -version
-          sdk_root="${GITHUB_WORKSPACE}/android-sdk"
-          cmdline_tools_version="11076708"
-          mkdir -p "${sdk_root}/cmdline-tools"
-          curl --fail --location --retry 3 \
-            "https://dl.google.com/android/repository/commandlinetools-linux-${cmdline_tools_version}_latest.zip" \
-            --output /tmp/android-commandline-tools.zip
-          unzip -q /tmp/android-commandline-tools.zip -d "${sdk_root}/cmdline-tools"
-          mv "${sdk_root}/cmdline-tools/cmdline-tools" "${sdk_root}/cmdline-tools/latest"
-          export PATH="${sdk_root}/cmdline-tools/latest/bin:${sdk_root}/platform-tools:${sdk_root}/build-tools/31.0.0:${PATH}"
           printf 'JAVA_HOME=%s\nANDROID_HOME=%s\nANDROID_SDK_ROOT=%s\n' \
-            "${JAVA_HOME}" "${sdk_root}" "${sdk_root}" >> "${GITHUB_ENV}"
+            "${JAVA_HOME}" "${ANDROID_HOME}" "${ANDROID_HOME}" >> "${GITHUB_ENV}"
           printf '%s\n' \
-            "${sdk_root}/cmdline-tools/latest/bin" \
-            "${sdk_root}/platform-tools" \
-            "${sdk_root}/build-tools/31.0.0" >> "${GITHUB_PATH}"
-          license_status=0
-          yes | sdkmanager --sdk_root="${sdk_root}" --licenses >/dev/null || license_status=$?
-          if [ "${license_status}" -ne 0 ] && [ "${license_status}" -ne 141 ]; then
-            exit "${license_status}"
-          fi
-          sdkmanager --sdk_root="${sdk_root}" \
+            "${ANDROID_HOME}/cmdline-tools/latest/bin" \
+            "${ANDROID_HOME}/platform-tools" \
+            "${ANDROID_HOME}/build-tools/31.0.0" >> "${GITHUB_PATH}"
+          printf 'y\n%.0s' {1..200} | sdkmanager --sdk_root="${ANDROID_HOME}" --licenses >/dev/null
+          sdkmanager --sdk_root="${ANDROID_HOME}" \
+            "cmdline-tools;latest" \
             "platform-tools" \
             "platforms;android-31" \
             "build-tools;31.0.0"
-          test -x "${sdk_root}/build-tools/31.0.0/aidl"
+          test -x "${ANDROID_HOME}/build-tools/31.0.0/aidl"
           command -v aidl
 
       - name: Install Buildozer
