@@ -85,12 +85,10 @@ jobs:
           printf 'JAVA_HOME=%s\nANDROID_HOME=%s\nANDROID_SDK_ROOT=%s\n' \
             "${JAVA_HOME}" "${ANDROID_HOME}" "${ANDROID_HOME}" >> "${GITHUB_ENV}"
           printf '%s\n' \
-            "${ANDROID_HOME}/cmdline-tools/latest/bin" \
             "${ANDROID_HOME}/platform-tools" \
             "${ANDROID_HOME}/build-tools/31.0.0" >> "${GITHUB_PATH}"
           printf 'y\n%.0s' {1..200} | sdkmanager --sdk_root="${ANDROID_HOME}" --licenses >/dev/null
           sdkmanager --sdk_root="${ANDROID_HOME}" \
-            "cmdline-tools;latest" \
             "platform-tools" \
             "platforms;android-31" \
             "build-tools;31.0.0"
