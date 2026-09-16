@@ -53,6 +53,15 @@ jobs:
             sudo apt-get install -y libtinfo6
           fi
 
+      - name: Select Java 17
+        shell: bash
+        run: |
+          set -euo pipefail
+          java_home="/usr/lib/jvm/java-17-openjdk-amd64"
+          printf 'JAVA_HOME=%s\n' "${java_home}" >> "${GITHUB_ENV}"
+          printf '%s\n' "${java_home}/bin" >> "${GITHUB_PATH}"
+          "${java_home}/bin/java" -version
+
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
