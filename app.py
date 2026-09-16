@@ -4,9 +4,11 @@ from database import (
     obtener_ventas, obtener_detalles_venta, obtener_venta_por_id,
     eliminar_venta, actualizar_producto_venta, recalcular_total_venta,
     eliminar_producto_venta, buscar_ventas_por_fecha, obtener_corte_diario,
-    obtener_total_vendido
+    obtener_total_vendido, crear_backup, restaurar_backup, obtener_estadisticas
 )
 from datetime import datetime
+import os
+import hashlib
 
 # =====================================
 # CONFIGURACION
@@ -19,10 +21,66 @@ productos = {
     "4": {"nombre": "Marlboro Rojo", "precio": 7}
 }
 
+# Usuarios demo (en producción usar hash)
+USUARIOS = {
+    "admin": hashlib.md5("admin123".encode()).hexdigest(),
+    "vendedor": hashlib.md5("vendedor123".encode()).hexdigest()
+}
+
 ticket_actual = {}
 total = 0
 recibido_temporal = ""
 venta_en_edicion = None
+usuario_activo = None
+page_global = None
+
+# =====================================
+# FUNCIONES DE AUTENTICACION
+# =====================================
+
+def verificar_contraseña(usuario, contraseña):
+    """Verifica credenciales de usuario"""
+    if usuario not in USUARIOS:
+        return False
+    hash_contraseña = hashlib.md5(contraseña.encode()).hexdigest()
+    return USUARIOS[usuario] == hash_contraseña
+
+def mostrar_login():
+    """Muestra pantalla de login"""
+    usuario_input = ft.TextField(
+        label="Usuario",
+        width=250
+    )
+    
+    contraseña_input = ft.TextField(
+        label="Contraseña",
+        password=True,
+        width=250
+    )
+    
+    def login_click(_):
+        if verificar_contraseña(usuario_input.value, contraseña_input.value):
+            global usuario_activo
+            usuario_activo = usuario_input.value
+            ir_a_principal()
+        else:
+            mostrar_snackbar("Credenciales inválidas", "error")
+    
+    dlg = ft.AlertDialog(
+        title=ft.Text("🔐 Login"),
+        content=ft.Column([
+            usuario_input,
+            contraseña_input,
+            ft.Text("Demo - Usuario: admin | Contraseña: admin123", size=10, color="gray")
+        ]),
+        actions=[
+            ft.TextButton("Ingresar", on_click=login_click)
+        ]
+    )
+    
+    page_global.dialog = dlg
+    dlg.open = True
+    page_global.update()
 
 # =====================================
 # FUNCIONES DEL TICKET
@@ -89,7 +147,7 @@ def actualizar_ticket():
     ticket_text.value += "─" * 30
 
     total_label.value = f"TOTAL: ${total}"
-    page.update()
+    page_global.update()
 
 def calcular_cambio():
     """Calcula el cambio según lo ingresado"""
@@ -110,7 +168,7 @@ def calcular_cambio():
         cambio_label.value = "CAMBIO: $0.00"
         cambio_label.color = "lightgreen"
     
-    page.update()
+    page_global.update()
 
 def cancelar_venta():
     """Cancela la venta actual"""
@@ -126,7 +184,7 @@ def cancelar_venta():
     cambio_label.value = "CAMBIO: $0.00"
     cambio_label.color = "lightgreen"
     
-    page.update()
+    page_global.update()
     mostrar_snackbar("Venta cancelada")
 
 def cobrar():
@@ -166,7 +224,7 @@ def cobrar():
 def mostrar_registros():
     """Muestra la pantalla de registros"""
     cargar_lista_ventas()
-    page.views.append(
+    page_global.views.append(
         ft.View("/registros", [
             ft.AppBar(
                 title=ft.Text("📊 Registros de Ventas"),
@@ -194,7 +252,7 @@ def mostrar_registros():
             ], expand=True, scroll="auto")
         ])
     )
-    page.update()
+    page_global.update()
 
 def cargar_lista_ventas():
     """Carga todas las ventas en la lista"""
@@ -229,7 +287,7 @@ def cargar_lista_ventas():
             )
         )
     
-    page.update()
+    page_global.update()
 
 def editar_venta(venta_id):
     """Abre la pantalla de edición de venta"""
@@ -276,8 +334,7 @@ def editar_venta(venta_id):
                             ft.IconButton(
                                 ft.icons.DELETE,
                                 icon_color="red",
-                                on_click=lambda _, did=detalle_id, cid=cantidad_field, pid=precio_field: 
-                                    eliminar_detalle(did)
+                                on_click=lambda _, did=detalle_id: eliminar_detalle(did)
                             ),
                             ft.IconButton(
                                 ft.icons.SAVE,
@@ -306,7 +363,7 @@ def editar_venta(venta_id):
     )
     
     detalles_venta_column.controls = [editar_column]
-    page.update()
+    page_global.update()
 
 def eliminar_detalle(detalle_id):
     """Elimina un producto de la venta"""
@@ -338,7 +395,7 @@ def cerrar_edicion():
     """Cierra la edición y recarga la lista"""
     detalles_venta_column.controls.clear()
     cargar_lista_ventas()
-    page.update()
+    page_global.update()
 
 def confirmar_eliminar(venta_id):
     """Muestra diálogo de confirmación para eliminar"""
@@ -349,20 +406,20 @@ def confirmar_eliminar(venta_id):
         else:
             mostrar_snackbar("Error al eliminar", "error")
         dlg_modal.open = False
-        page.update()
+        page_global.update()
     
     dlg_modal = ft.AlertDialog(
         title=ft.Text("¿Eliminar venta?"),
         content=ft.Text("Esta acción no se puede deshacer"),
         actions=[
-            ft.TextButton("Cancelar", on_click=lambda _: (setattr(dlg_modal, 'open', False), page.update())),
+            ft.TextButton("Cancelar", on_click=lambda _: (setattr(dlg_modal, 'open', False), page_global.update())),
             ft.TextButton("Eliminar", on_click=eliminar_confirmed)
         ]
     )
     
-    page.dialog = dlg_modal
+    page_global.dialog = dlg_modal
     dlg_modal.open = True
-    page.update()
+    page_global.update()
 
 def buscar_venta_por_fecha(fecha):
     """Busca ventas por fecha"""
@@ -401,12 +458,53 @@ def buscar_venta_por_fecha(fecha):
             )
         )
     
-    page.update()
+    page_global.update()
 
 def volver_a_principal():
     """Vuelve a la pantalla principal"""
-    page.views.pop()
-    page.update()
+    page_global.views.pop()
+    page_global.update()
+
+# =====================================
+# FUNCIONES DE BACKUP Y REPORTES
+# =====================================
+
+def hacer_backup():
+    """Crea un backup de la base de datos"""
+    try:
+        crear_backup()
+        mostrar_snackbar("✓ Backup realizado correctamente", "success")
+    except Exception as e:
+        mostrar_snackbar(f"Error en backup: {str(e)}", "error")
+
+def mostrar_estadisticas():
+    """Muestra estadísticas de ventas"""
+    stats = obtener_estadisticas()
+    
+    contenido = f"""
+📊 ESTADÍSTICAS
+
+Total de ventas: {stats['total_ventas']}
+Total vendido: ${stats['total_vendido']:.2f}
+Promedio por venta: ${stats['promedio_venta']:.2f}
+Venta más alta: ${stats['venta_maxima']:.2f}
+Venta más baja: ${stats['venta_minima']:.2f}
+
+Productos más vendidos:
+{stats['productos_top']}
+    """
+    
+    dlg = ft.AlertDialog(
+        title=ft.Text("📈 Estadísticas"),
+        content=ft.Text(contenido),
+        actions=[
+            ft.TextButton("Cerrar", on_click=lambda _: (setattr(dlg, 'open', False), page_global.update()))
+        ]
+    )
+    
+    page_global.dialog = dlg
+    dlg.open = True
+    page_global.update()
 
 # =====================================
 # FUNCIONES UI
@@ -419,15 +517,18 @@ def mostrar_snackbar(mensaje, tipo="info"):
         ft.Text(mensaje),
         bgcolor=color
     )
-    page.overlay.append(snackbar)
+    page_global.overlay.append(snackbar)
     snackbar.open = True
-    page.update()
+    page_global.update()
 
 def handle_keyboard(e):
     """Maneja entrada de teclado"""
     global recibido_temporal
     
     key = e.key
+    
+    if not usuario_activo:
+        return
     
     # Productos (1-4)
     if key in productos:
@@ -489,45 +590,35 @@ def mostrar_reportes():
         title=ft.Text("📊 Reportes"),
         content=ft.Text(reporte_text),
         actions=[
-            ft.TextButton("Cerrar", on_click=lambda _: (setattr(dlg, 'open', False), page.update()))
+            ft.TextButton("Cerrar", on_click=lambda _: (setattr(dlg, 'open', False), page_global.update()))
         ]
     )
     
-    page.dialog = dlg
+    page_global.dialog = dlg
     dlg.open = True
-    page.update()
+    page_global.update()
+
+def logout():
+    """Cierra sesión"""
+    global usuario_activo
+    usuario_activo = None
+    page_global.views.clear()
+    page_global.update()
+    mostrar_login()
+
+def ir_a_principal():
+    """Va a la pantalla principal"""
+    page_global.views.clear()
+    page_global.views.append(crear_vista_principal())
+    page_global.update()
 
 # =====================================
-# CONFIGURAR UI GLOBAL
+# VISTAS
 # =====================================
 
-ticket_text = ft.Text("El ticket aparecerá aquí", size=12)
-total_label = ft.Text("TOTAL: $0", size=28, weight="bold", color="lightgreen")
-recibido_label = ft.Text("RECIBIDO: $0", size=20, weight="bold", color="lightblue")
-cambio_label = ft.Text("CAMBIO: $0.00", size=20, weight="bold", color="lightgreen")
-folio_label = ft.Text(f"FOLIO: {obtener_siguiente_folio():06d}", size=16, weight="bold", color="orange")
-
-lista_ventas = ft.Column(expand=True, scroll="auto")
-detalles_venta_column = ft.Column(expand=True, scroll="auto")
-editar_column = ft.Column()
-
-# =====================================
-# VISTA PRINCIPAL
-# =====================================
-
-def main(page: ft.Page):
-    global page as page_global
-    
-    page.title = "Caja Registradora Android"
-    page.scroll = "auto"
-    
-    crear_bd()
-    
-    # Bind de teclado
-    page.on_keyboard_event = handle_keyboard
-    
-    # Vista principal
-    page_principal = ft.View("/", [
+def crear_vista_principal():
+    """Crea la vista principal"""
+    return ft.View("/", [
         ft.AppBar(
             title=ft.Text("🛍️ CAJA REGISTRADORA"),
             bgcolor="blue",
@@ -536,17 +627,32 @@ def main(page: ft.Page):
                     ft.icons.RECEIPT_LONG,
                     on_click=lambda _: mostrar_registros(),
                     tooltip="Registros"
+                ),
+                ft.IconButton(
+                    ft.icons.BACKUP,
+                    on_click=lambda _: hacer_backup(),
+                    tooltip="Backup"
+                ),
+                ft.IconButton(
+                    ft.icons.ANALYTICS,
+                    on_click=lambda _: mostrar_estadisticas(),
+                    tooltip="Estadísticas"
+                ),
+                ft.IconButton(
+                    ft.icons.LOGOUT,
+                    on_click=lambda _: logout(),
+                    tooltip="Cerrar Sesión"
                 )
             ]
         ),
         ft.Container(
             content=ft.Column([
+                ft.Text(f"👤 {usuario_activo}", size=12, color="gray"),
                 ft.Text("⌨️ [1-4] Productos | [Números] Dinero | [ENTER] Cobrar | [C] Cancelar", 
                        size=10, color="lightblue"),
                 folio_label,
                 ft.Divider(),
                 
-                # Ticket
                 ft.Card(
                     content=ft.Container(
                         content=ticket_text,
@@ -554,14 +660,12 @@ def main(page: ft.Page):
                     )
                 ),
                 
-                # Totales
                 total_label,
                 recibido_label,
                 cambio_label,
                 
                 ft.Divider(),
                 
-                # Botones principales
                 ft.Row([
                     ft.ElevatedButton(
                         "COBRAR [ENTER]",
@@ -588,8 +692,37 @@ def main(page: ft.Page):
             padding=15
         )
     ])
+
+# =====================================
+# CONFIGURAR UI GLOBAL
+# =====================================
+
+ticket_text = ft.Text("El ticket aparecerá aquí", size=12)
+total_label = ft.Text("TOTAL: $0", size=28, weight="bold", color="lightgreen")
+recibido_label = ft.Text("RECIBIDO: $0", size=20, weight="bold", color="lightblue")
+cambio_label = ft.Text("CAMBIO: $0.00", size=20, weight="bold", color="lightgreen")
+folio_label = ft.Text(f"FOLIO: {obtener_siguiente_folio():06d}", size=16, weight="bold", color="orange")
+
+lista_ventas = ft.Column(expand=True, scroll="auto")
+detalles_venta_column = ft.Column(expand=True, scroll="auto")
+editar_column = ft.Column()
+
+# =====================================
+# INICIAR APP
+# =====================================
+
+def main(page: ft.Page):
+    global page_global
+    page_global = page
     
-    page.add(page_principal)
+    page.title = "Caja Registradora Android"
+    page.scroll = "auto"
+    
+    crear_bd()
+    
+    page.on_keyboard_event = handle_keyboard
+    
+    mostrar_login()
 
 if __name__ == "__main__":
     ft.app(target=main)
