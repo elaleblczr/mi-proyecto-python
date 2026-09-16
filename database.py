@@ -1,5 +1,7 @@
 import sqlite3
 from datetime import datetime
+import shutil
+import os
 
 
 # =====================================
@@ -442,3 +444,200 @@ def buscar_ventas_por_fecha(fecha):
     conexion.close()
 
     return ventas
+
+
+# =====================================
+# CREAR BACKUP
+# =====================================
+
+def crear_backup():
+    """Crea una copia de seguridad de la base de datos"""
+    try:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_dir = "backups"
+        
+        # Crear carpeta de backups si no existe
+        if not os.path.exists(backup_dir):
+            os.makedirs(backup_dir)
+        
+        backup_path = f"{backup_dir}/ventas_backup_{timestamp}.db"
+        shutil.copy2("ventas.db", backup_path)
+        
+        return True, f"Backup guardado: {backup_path}"
+    
+    except Exception as e:
+        return False, f"Error en backup: {str(e)}"
+
+
+# =====================================
+# RESTAURAR BACKUP
+# =====================================
+
+def restaurar_backup(backup_path):
+    """Restaura la base de datos desde un backup"""
+    try:
+        shutil.copy2(backup_path, "ventas.db")
+        return True, "Backup restaurado exitosamente"
+    
+    except Exception as e:
+        return False, f"Error al restaurar: {str(e)}"
+
+
+# =====================================
+# OBTENER ESTADISTICAS
+# =====================================
+
+def obtener_estadisticas():
+    """Obtiene estadísticas de ventas"""
+    conexion = sqlite3.connect("ventas.db")
+    cursor = conexion.cursor()
+
+    try:
+        # Total de ventas
+        cursor.execute("SELECT COUNT(*) FROM ventas")
+        total_ventas = cursor.fetchone()[0]
+
+        # Total vendido
+        cursor.execute("SELECT SUM(total) FROM ventas")
+        total_vendido = cursor.fetchone()[0] or 0
+
+        # Promedio por venta
+        promedio_venta = total_vendido / total_ventas if total_ventas > 0 else 0
+
+        # Venta máxima
+        cursor.execute("SELECT MAX(total) FROM ventas")
+        venta_maxima = cursor.fetchone()[0] or 0
+
+        # Venta mínima
+        cursor.execute("SELECT MIN(total) FROM ventas WHERE total > 0")
+        venta_minima = cursor.fetchone()[0] or 0
+
+        # Productos más vendidos
+        cursor.execute("""
+        SELECT producto, SUM(cantidad) as total_cantidad
+        FROM detalle_venta
+        GROUP BY producto
+        ORDER BY total_cantidad DESC
+        LIMIT 5
+        """)
+
+        productos_top = cursor.fetchall()
+        productos_texto = "\n".join([f"{p[0]}: {int(p[1])} unidades" for p in productos_top])
+
+        conexion.close()
+
+        return {
+            "total_ventas": total_ventas,
+            "total_vendido": total_vendido,
+            "promedio_venta": promedio_venta,
+            "venta_maxima": venta_maxima,
+            "venta_minima": venta_minima,
+            "productos_top": productos_texto
+        }
+
+    except Exception as e:
+        conexion.close()
+        return {
+            "total_ventas": 0,
+            "total_vendido": 0,
+            "promedio_venta": 0,
+            "venta_maxima": 0,
+            "venta_minima": 0,
+            "productos_top": "Sin datos"
+        }
+
+
+# =====================================
+# OBTENER LISTA DE BACKUPS
+# =====================================
+
+def obtener_backups():
+    """Obtiene lista de archivos de backup disponibles"""
+    try:
+        if not os.path.exists("backups"):
+            return []
+        
+        backups = [f for f in os.listdir("backups") if f.startswith("ventas_backup_")]
+        return sorted(backups, reverse=True)
+    
+    except:
+        return []
+
+
+# =====================================
+# EXPORTAR A CSV
+# =====================================
+
+def exportar_ventas_csv():
+    """Exporta todas las ventas a formato CSV"""
+    try:
+        import csv
+        
+        conexion = sqlite3.connect("ventas.db")
+        cursor = conexion.cursor()
+        
+        cursor.execute("""
+        SELECT v.id, v.fecha, v.total, dv.producto, dv.cantidad, dv.precio
+        FROM ventas v
+        LEFT JOIN detalle_venta dv ON v.id = dv.venta_id
+        ORDER BY v.id DESC
+        """)
+        
+        datos = cursor.fetchall()
+        conexion.close()
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        archivo = f"ventas_export_{timestamp}.csv"
+        
+        with open(archivo, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(["ID Venta", "Fecha", "Total Venta", "Producto", "Cantidad", "Precio"])
+            writer.writerows(datos)
+        
+        return True, f"Exportado a: {archivo}"
+    
+    except Exception as e:
+        return False, f"Error al exportar: {str(e)}"
+
+
+# =====================================
+# OBTENER REPORTE MENSUAL
+# =====================================
+
+def obtener_reporte_mensual(mes, año):
+    """Obtiene reporte de ventas de un mes específico"""
+    conexion = sqlite3.connect("ventas.db")
+    cursor = conexion.cursor()
+
+    try:
+        # Formato: MM y YYYY
+        mes_str = f"{mes:02d}"
+        
+        cursor.execute("""
+        SELECT
+            COUNT(*) as total_ventas,
+            SUM(total) as total_vendido,
+            AVG(total) as promedio,
+            MAX(total) as venta_maxima,
+            MIN(total) as venta_minima
+        FROM ventas
+        WHERE substr(fecha,4,2) = ? AND substr(fecha,7,4) = ?
+        """, (mes_str, str(año)))
+
+        resultado = cursor.fetchone()
+        conexion.close()
+
+        if resultado[0] is None:
+            return None
+
+        return {
+            "total_ventas": resultado[0],
+            "total_vendido": resultado[1] or 0,
+            "promedio": resultado[2] or 0,
+            "venta_maxima": resultado[3] or 0,
+            "venta_minima": resultado[4] or 0
+        }
+
+    except Exception as e:
+        conexion.close()
+        return None
