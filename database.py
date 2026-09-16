@@ -3,6 +3,13 @@ from datetime import datetime
 import shutil
 import os
 
+DB_PATH = os.environ.get("CAJA_DB_PATH", "ventas.db")
+
+
+def _conectar():
+    """Abre la base configurada para escritorio o para el almacenamiento Android."""
+    return sqlite3.connect(DB_PATH)
+
 
 # =====================================
 # CREAR BASE DE DATOS
@@ -10,7 +17,7 @@ import os
 
 def crear_bd():
 
-    conexion = sqlite3.connect("ventas.db")
+    conexion = _conectar()
     cursor = conexion.cursor()
 
     cursor.execute("""
@@ -42,7 +49,7 @@ def crear_bd():
 
 def guardar_venta(ticket_actual, total):
 
-    conexion = sqlite3.connect("ventas.db")
+    conexion = _conectar()
     cursor = conexion.cursor()
 
     fecha = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
@@ -89,7 +96,7 @@ def guardar_venta(ticket_actual, total):
 
 def obtener_ventas():
 
-    conexion = sqlite3.connect("ventas.db")
+    conexion = _conectar()
     cursor = conexion.cursor()
 
     cursor.execute("""
@@ -111,7 +118,7 @@ def obtener_ventas():
 
 def obtener_detalles_venta(venta_id):
 
-    conexion = sqlite3.connect("ventas.db")
+    conexion = _conectar()
     cursor = conexion.cursor()
 
     cursor.execute("""
@@ -134,7 +141,7 @@ def obtener_detalles_venta(venta_id):
 
 def obtener_venta_por_id(venta_id):
 
-    conexion = sqlite3.connect("ventas.db")
+    conexion = _conectar()
     cursor = conexion.cursor()
 
     cursor.execute("""
@@ -156,7 +163,7 @@ def obtener_venta_por_id(venta_id):
 
 def obtener_siguiente_folio():
 
-    conexion = sqlite3.connect("ventas.db")
+    conexion = _conectar()
     cursor = conexion.cursor()
 
     cursor.execute("""
@@ -180,7 +187,7 @@ def obtener_siguiente_folio():
 
 def obtener_corte_diario():
 
-    conexion = sqlite3.connect("ventas.db")
+    conexion = _conectar()
     cursor = conexion.cursor()
 
     cursor.execute("""
@@ -196,7 +203,7 @@ def obtener_corte_diario():
             substr(fecha,7,4) || '-' ||
             substr(fecha,4,2) || '-' ||
             substr(fecha,1,2)
-        ) = DATE('now')
+        ) = DATE('now', 'localtime')
     )
     GROUP BY producto
     """)
@@ -214,7 +221,7 @@ def obtener_corte_diario():
 
 def obtener_total_vendido():
 
-    conexion = sqlite3.connect("ventas.db")
+    conexion = _conectar()
     cursor = conexion.cursor()
 
     cursor.execute("""
@@ -224,7 +231,7 @@ def obtener_total_vendido():
         substr(fecha,7,4) || '-' ||
         substr(fecha,4,2) || '-' ||
         substr(fecha,1,2)
-    ) = DATE('now')
+    ) = DATE('now', 'localtime')
     """)
 
     resultado = cursor.fetchone()[0]
@@ -249,7 +256,7 @@ def obtener_total_hoy():
 
 def obtener_corte_semanal():
 
-    conexion = sqlite3.connect("ventas.db")
+    conexion = _conectar()
     cursor = conexion.cursor()
 
     cursor.execute("""
@@ -265,7 +272,7 @@ def obtener_corte_semanal():
             substr(fecha,7,4) || '-' ||
             substr(fecha,4,2) || '-' ||
             substr(fecha,1,2)
-        ) = strftime('%Y-%W', 'now')
+        ) = strftime('%Y-%W', 'now', 'localtime')
     )
     GROUP BY producto
     """)
@@ -283,7 +290,7 @@ def obtener_corte_semanal():
 
 def obtener_total_semanal():
 
-    conexion = sqlite3.connect("ventas.db")
+    conexion = _conectar()
     cursor = conexion.cursor()
 
     cursor.execute("""
@@ -293,7 +300,7 @@ def obtener_total_semanal():
         substr(fecha,7,4) || '-' ||
         substr(fecha,4,2) || '-' ||
         substr(fecha,1,2)
-    ) = strftime('%Y-%W', 'now')
+    ) = strftime('%Y-%W', 'now', 'localtime')
     """)
 
     resultado = cursor.fetchone()[0]
@@ -309,7 +316,7 @@ def obtener_total_semanal():
 
 def eliminar_venta(venta_id):
     """Elimina una venta y sus detalles"""
-    conexion = sqlite3.connect("ventas.db")
+    conexion = _conectar()
     cursor = conexion.cursor()
 
     try:
@@ -340,7 +347,7 @@ def eliminar_venta(venta_id):
 
 def actualizar_producto_venta(detalle_id, cantidad, precio):
     """Actualiza cantidad y precio de un producto en una venta"""
-    conexion = sqlite3.connect("ventas.db")
+    conexion = _conectar()
     cursor = conexion.cursor()
 
     try:
@@ -367,7 +374,7 @@ def actualizar_producto_venta(detalle_id, cantidad, precio):
 
 def recalcular_total_venta(venta_id):
     """Recalcula el total de una venta basado en sus detalles"""
-    conexion = sqlite3.connect("ventas.db")
+    conexion = _conectar()
     cursor = conexion.cursor()
 
     try:
@@ -405,7 +412,7 @@ def recalcular_total_venta(venta_id):
 
 def eliminar_producto_venta(detalle_id):
     """Elimina un producto de una venta"""
-    conexion = sqlite3.connect("ventas.db")
+    conexion = _conectar()
     cursor = conexion.cursor()
 
     try:
@@ -429,7 +436,7 @@ def eliminar_producto_venta(detalle_id):
 
 def buscar_ventas_por_fecha(fecha):
     """Busca ventas por fecha específica (formato: DD/MM/YYYY)"""
-    conexion = sqlite3.connect("ventas.db")
+    conexion = _conectar()
     cursor = conexion.cursor()
 
     cursor.execute("""
@@ -489,7 +496,7 @@ def restaurar_backup(backup_path):
 
 def obtener_estadisticas():
     """Obtiene estadísticas de ventas"""
-    conexion = sqlite3.connect("ventas.db")
+    conexion = _conectar()
     cursor = conexion.cursor()
 
     try:
@@ -573,7 +580,7 @@ def exportar_ventas_csv():
     try:
         import csv
         
-        conexion = sqlite3.connect("ventas.db")
+        conexion = _conectar()
         cursor = conexion.cursor()
         
         cursor.execute("""
@@ -606,7 +613,7 @@ def exportar_ventas_csv():
 
 def obtener_reporte_mensual(mes, año):
     """Obtiene reporte de ventas de un mes específico"""
-    conexion = sqlite3.connect("ventas.db")
+    conexion = _conectar()
     cursor = conexion.cursor()
 
     try:
