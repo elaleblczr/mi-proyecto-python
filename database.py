@@ -1,5 +1,13 @@
+import os
 import sqlite3
 from datetime import datetime
+
+DB_PATH = os.environ.get("CAJA_DB_PATH", "ventas.db")
+
+
+def _conectar():
+    """Abre la base configurada para escritorio o para el almacenamiento de Android."""
+    return sqlite3.connect(DB_PATH)
 
 
 # =====================================
@@ -8,7 +16,7 @@ from datetime import datetime
 
 def crear_bd():
 
-    conexion = sqlite3.connect("ventas.db")
+    conexion = _conectar()
     cursor = conexion.cursor()
 
     cursor.execute("""
@@ -40,7 +48,7 @@ def crear_bd():
 
 def guardar_venta(ticket_actual, total):
 
-    conexion = sqlite3.connect("ventas.db")
+    conexion = _conectar()
     cursor = conexion.cursor()
 
     fecha = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
@@ -87,7 +95,7 @@ def guardar_venta(ticket_actual, total):
 
 def obtener_ventas():
 
-    conexion = sqlite3.connect("ventas.db")
+    conexion = _conectar()
     cursor = conexion.cursor()
 
     cursor.execute("""
@@ -109,7 +117,7 @@ def obtener_ventas():
 
 def obtener_siguiente_folio():
 
-    conexion = sqlite3.connect("ventas.db")
+    conexion = _conectar()
     cursor = conexion.cursor()
 
     cursor.execute("""
@@ -133,7 +141,7 @@ def obtener_siguiente_folio():
 
 def obtener_corte_diario():
 
-    conexion = sqlite3.connect("ventas.db")
+    conexion = _conectar()
     cursor = conexion.cursor()
 
     cursor.execute("""
@@ -149,7 +157,7 @@ def obtener_corte_diario():
             substr(fecha,7,4) || '-' ||
             substr(fecha,4,2) || '-' ||
             substr(fecha,1,2)
-        ) = DATE('now')
+        ) = DATE('now', 'localtime')
     )
     GROUP BY producto
     """)
@@ -161,4 +169,108 @@ def obtener_corte_diario():
     return datos
 
 
-# ==========
+# =====================================
+# TOTAL VENDIDO HOY
+# =====================================
+
+def obtener_total_hoy():
+
+    conexion = _conectar()
+    cursor = conexion.cursor()
+
+    cursor.execute("""
+    SELECT SUM(total)
+    FROM ventas
+    WHERE DATE(
+        substr(fecha,7,4) || '-' ||
+        substr(fecha,4,2) || '-' ||
+        substr(fecha,1,2)
+    ) = DATE('now', 'localtime')
+    """)
+
+    resultado = cursor.fetchone()[0]
+
+    conexion.close()
+
+    return resultado if resultado is not None else 0
+
+
+# =====================================
+# TOTAL VENDIDO TOTAL
+# =====================================
+
+def obtener_total_vendido():
+
+    conexion = _conectar()
+    cursor = conexion.cursor()
+
+    cursor.execute("""
+    SELECT SUM(total)
+    FROM ventas
+    """)
+
+    resultado = cursor.fetchone()[0]
+
+    conexion.close()
+
+    return resultado if resultado is not None else 0
+
+
+# =====================================
+# CORTE SEMANAL
+# =====================================
+
+def obtener_corte_semanal():
+
+    conexion = _conectar()
+    cursor = conexion.cursor()
+
+    cursor.execute("""
+    SELECT
+        producto,
+        SUM(cantidad),
+        SUM(subtotal)
+    FROM detalle_venta
+    WHERE venta_id IN (
+        SELECT id
+        FROM ventas
+        WHERE DATE(
+            substr(fecha,7,4) || '-' ||
+            substr(fecha,4,2) || '-' ||
+            substr(fecha,1,2)
+        ) >= DATE('now', '-7 days', 'localtime')
+    )
+    GROUP BY producto
+    """)
+
+    datos = cursor.fetchall()
+
+    conexion.close()
+
+    return datos
+
+
+# =====================================
+# TOTAL SEMANAL
+# =====================================
+
+def obtener_total_semanal():
+
+    conexion = _conectar()
+    cursor = conexion.cursor()
+
+    cursor.execute("""
+    SELECT SUM(total)
+    FROM ventas
+    WHERE DATE(
+        substr(fecha,7,4) || '-' ||
+        substr(fecha,4,2) || '-' ||
+        substr(fecha,1,2)
+    ) >= DATE('now', '-7 days', 'localtime')
+    """)
+
+    resultado = cursor.fetchone()[0]
+
+    conexion.close()
+
+    return resultado if resultado is not None else 0
