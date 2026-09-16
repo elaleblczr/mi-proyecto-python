@@ -2,6 +2,7 @@
 title = Caja Registradora
 package.name = cajaregistradora
 package.domain = org.cajaregistradora
+version = 1.0.0
 source.dir = .
 source.include_exts = py,db
 source.exclude_dirs = venv,build,dist,__pycache__,.git

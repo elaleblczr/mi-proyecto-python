@@ -25,6 +25,8 @@ jobs:
 
       - name: Install Android build dependencies
         run: |
+          sudo apt-get install -y software-properties-common
+          sudo add-apt-repository -y universe
           sudo apt-get update
           sudo apt-get install -y \
             autoconf \
@@ -42,10 +44,14 @@ jobs:
             libtool-bin \
             openjdk-17-jdk \
             pkg-config \
-            libtinfo5 \
             unzip \
             zip \
             zlib1g-dev
+          if apt-cache show libtinfo5 >/dev/null 2>&1; then
+            sudo apt-get install -y libtinfo5
+          else
+            sudo apt-get install -y libtinfo6
+          fi
 
       - name: Install Buildozer
         run: |
